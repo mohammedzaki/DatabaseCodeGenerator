@@ -1,0 +1,458 @@
+using System;
+using System.Collections.Generic;
+using System.Data;	  
+using System.Text;
+using System.Data.SqlClient;
+
+namespace N_Tier_Classes.DataAccessLayer
+{
+   public class DB_OperationProcess
+    {
+        #region Fields
+        private string _QueryFields = "";
+        private string _QueryFieldsAndValues = "";
+        private string _QueryFieldsToWhere = "";
+        private string _QueryValues = "";
+        private List<SqlParameter> _SqlParameters = new List<SqlParameter>();
+        private int _IndexOfValues = 0;
+        private Enum _CurrentField;
+        private static string _ConnectionString = "";
+        private string _QueryTables = "";
+        private string _FirstTable = "";
+        private Type _Type;
+        private SqlTransaction _Transaction = null;
+        private SqlConnection _Connection = new SqlConnection();
+        private SqlConnection _TestConnection = new SqlConnection();
+        private bool _TransPeriod = false;
+        private List<SqlCommand> _TransactionsCommands = new List<SqlCommand>();
+        public static string ServerName = "";
+        public static string DatabaseName = "";
+        public static string UserID = "";
+        public static string UserPassword = "";
+        public static bool IntegratedSecurity = true;
+        #endregion
+
+        public DB_OperationProcess()
+        {
+        }
+
+        public static string ConnectionString
+        {
+            set { _ConnectionString = value; }
+            get { return _ConnectionString; }
+        }
+
+        #region Transactions
+        public void StartTransaction()
+        {
+            _TransPeriod = true;
+            _Connection.ConnectionString = _ConnectionString;
+            _Connection.Open();
+            _Transaction = _Connection.BeginTransaction(IsolationLevel.Serializable);
+        }
+        public void CommitTransaction()
+        {
+            _Transaction.Commit();
+            _Connection.Close();
+            _Connection.ConnectionString = "";
+            _TransactionsCommands.Clear();
+            _TransPeriod = false;
+        }
+        public void RollBackTransaction()
+        {
+            if (_TransPeriod == true)
+                _Transaction.Rollback();
+            _Connection.Close();
+            _Connection.ConnectionString = "";
+            _TransactionsCommands.Clear();
+            _TransPeriod = false;
+        }
+        #endregion
+
+        public bool TestConnection()
+        {
+            //try
+            //{
+            _TestConnection.ConnectionString = ConnectionString;
+            _TestConnection.Open();
+            _TestConnection.Close();
+            return true;
+            //}
+            //catch (Exception)
+            //{
+            //    //MessageBox.Show("ãä ÝÖáß ÊÃßÏ ÇáÇÊÕÇá ÈÇáÔÈßÉ Çæ ÞÇÚÏÉ ÇáÈíÇäÇÊ", "Connection Failer", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+
+            //    return false;
+            //}
+        }
+
+        public bool CheckExist(string DatabaseName)
+        {
+            if (ExecuteSqlStatmentQuery(@"select name from sys.databases where name = '" + DatabaseName + "'", ResultReturnedDataType.Scalar) == null)
+                return false;
+            else
+                return true;
+        }
+
+        //public bool CreateDatabase(string ServerName, string DatabaseScript)
+        //{
+        //    SqlConnection masterConnection = new SqlConnection(@"Data Source=" + ServerName + ";Initial Catalog=master;Integrated Security=True");
+        //    SqlCommand command;
+        //    try
+        //    {
+        //        masterConnection.Open();
+        //        string[] commands = DatabaseScript.Split(
+        //            new string[] { "GO\r\n", "GO ", "GO\t" }, StringSplitOptions.RemoveEmptyEntries);
+        //        foreach (string c in commands)
+        //        {
+        //            command = new SqlCommand(c, masterConnection);
+        //            command.ExecuteNonQuery();
+        //        }
+        //        masterConnection.Close();
+        //        return true;
+        //    }
+        //    catch (Exception exp)
+        //    {
+        //        masterConnection.Close();
+        //        MessageBox.Show(exp.Message);
+        //        return false;
+        //    }
+        //}
+
+        //public bool CreateDatabase(string ServerName, string UserName, string Password, string DatabaseScript)
+        //{
+        //    SqlConnection masterConnection = new SqlConnection(@"Data Source=" + ServerName + ";Initial Catalog=master;User Id=" + UserName + ";Password=" + Password + ";");
+        //    SqlCommand command;
+        //    try
+        //    {
+        //        masterConnection.Open();
+        //        string[] commands = DatabaseScript.Split(
+        //            new string[] { "GO\r\n", "GO ", "GO\t" }, StringSplitOptions.RemoveEmptyEntries);
+        //        foreach (string c in commands)
+        //        {
+        //            command = new SqlCommand(c, masterConnection);
+        //            command.ExecuteNonQuery();
+        //        }
+        //        masterConnection.Close();
+        //        return true;
+        //    }
+        //    catch (Exception exp)
+        //    {
+        //        masterConnection.Close();
+        //        MessageBox.Show(exp.Message);
+        //        return false;
+        //    }
+        //}
+
+        public enum ResultReturnedDataType
+        {
+            Table,
+            Column,
+            Row,
+            Scalar,
+            NumberOfRowsAffected,
+            DataSet
+        }
+
+        public virtual object ExecuteSqlStatmentQuery(string SqlQureyStatment, ResultReturnedDataType ReturnType)
+        {
+            object Result = null;
+            try
+            {
+                if (_TransPeriod == false)
+                {
+                    _Connection.ConnectionString = _ConnectionString;
+                    _Connection.Open();
+                }
+                _TransactionsCommands.Add(new SqlCommand(SqlQureyStatment, _Connection));
+                if (_SqlParameters.Count > 0)
+                {
+                    foreach (SqlParameter CurrentPar in _SqlParameters)
+                    {
+                        _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.Add(CurrentPar);
+                    }
+                }
+                DataSet Dataset = new DataSet();
+                SqlDataAdapter DataReader = new SqlDataAdapter();
+                SqlCommandBuilder sqlbuilder = new SqlCommandBuilder();
+                if (_TransPeriod)
+                {
+                    _TransactionsCommands[_TransactionsCommands.Count - 1].Transaction = _Transaction;
+                    //command.Transaction = transaction;
+                }
+                switch (ReturnType)
+                {
+                    case ResultReturnedDataType.Table:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset.Tables[0];
+                        break;
+                    case ResultReturnedDataType.Column:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset.Tables[0].Columns[0];
+                        break;
+                    case ResultReturnedDataType.Row:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        if (Dataset.Tables[0].Rows.Count > 0)
+                            Result = Dataset.Tables[0].Rows[0];
+                        else
+                            Result = null;
+                        break;
+                    case ResultReturnedDataType.Scalar:
+                        Result = _TransactionsCommands[_TransactionsCommands.Count - 1].ExecuteScalar();
+                        break;
+                    case ResultReturnedDataType.NumberOfRowsAffected:
+                        Result = _TransactionsCommands[_TransactionsCommands.Count - 1].ExecuteNonQuery();
+                        break;
+                    case ResultReturnedDataType.DataSet:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset;
+                        break;
+                }
+                if (_TransPeriod == false)
+                {
+                    _Connection.Close();
+                    _Connection.ConnectionString = "";
+                    _TransactionsCommands.Clear();
+                }
+
+            }
+            catch (Exception Exp)
+            {
+                //_Connection.Close();
+                //_Connection.ConnectionString = "";
+                //RollBackTransaction();
+                //Result = null;
+                throw Exp;
+            }
+            _QueryValues = "";
+            if (_SqlParameters.Count > 0)
+                _SqlParameters.Clear();
+            _QueryFieldsAndValues = "";
+            _QueryFieldsToWhere = "";
+            _QueryFields = "";
+            _QueryTables = "";
+            _FirstTable = "";
+            _IndexOfValues = 0;
+            return Result;
+        }
+
+        public virtual long NewID()
+        {
+            DataTable myTable = (DataTable)ExecuteSqlStatmentQuery("SELECT PK_ID from " + this.GetType().Name, ResultReturnedDataType.Table);
+            if (myTable.Rows.Count == 0)
+                return 1;
+            else
+                return Convert.ToInt64(ExecuteSqlStatmentQuery("SELECT MAX(PK_ID) from " + this.GetType().Name, ResultReturnedDataType.Scalar)) + 1;
+        }
+
+        public virtual long NewID(TablesNames TableName)
+        {
+            DataTable myTable = (DataTable)ExecuteSqlStatmentQuery("SELECT * from " + TableName.ToString(), ResultReturnedDataType.Table);
+            if (myTable.Rows.Count == 0)
+                return 1;
+            else
+                return Convert.ToInt64(ExecuteSqlStatmentQuery("SELECT MAX(PK_ID) from " + TableName.ToString(), ResultReturnedDataType.Scalar)) + 1;
+        }
+
+        public int MaxID
+        {
+            get
+            {
+                DataTable myTable = (DataTable)ExecuteSqlStatmentQuery("SELECT PK_ID from " + this.GetType().Name, ResultReturnedDataType.Table);
+                if (myTable.Rows.Count == 0)
+                    return 0;
+                else
+                    return Convert.ToInt32(ExecuteSqlStatmentQuery("SELECT MAX(PK_ID) from " + this.GetType().Name, ResultReturnedDataType.Scalar));
+                //return -1;
+            }
+        }
+
+        public virtual object Delete(TablesNames TableName, params object[] Fields)
+        {
+            foreach (var field in Fields)
+            {
+                try
+                {
+                    _CurrentField = (Enum)field;
+                }
+                catch (Exception)
+                {
+                    if (_QueryFieldsToWhere == "")
+                    {
+                        if (field.GetType() == typeof(String))
+                            _QueryFieldsToWhere += " " + Fields[_IndexOfValues - 1].ToString() + " = " + "'" + field + "'" + " ";
+                        else
+                            _QueryFieldsToWhere += " " + Fields[_IndexOfValues - 1].ToString() + " = " + field + " ";
+                    }
+                    else
+                    {
+                        if (field.GetType() == typeof(String))
+                            _QueryFieldsToWhere += " and " + Fields[_IndexOfValues - 1].ToString() + " = " + "'" + field + "'" + " ";
+                        else
+                            _QueryFieldsToWhere += " and " + Fields[_IndexOfValues - 1].ToString() + " = " + field + " ";
+                    }
+                }
+                _IndexOfValues++;
+            }
+            return ExecuteSqlStatmentQuery("DELETE FROM " + TableName.ToString() + " WHERE " + _QueryFieldsToWhere, ResultReturnedDataType.NumberOfRowsAffected);
+        }
+
+        public virtual object DeleteALL(TablesNames TableName)
+        {
+            return ExecuteSqlStatmentQuery("DELETE FROM " + TableName.ToString(), ResultReturnedDataType.NumberOfRowsAffected);
+        }
+
+        public virtual object Select(params object[] Fields)
+        {
+            _FirstTable = Fields[0].GetType().DeclaringType.Name;
+            foreach (var field in Fields)
+            {
+                if (field.GetType().BaseType == typeof(Enum))
+                {
+                    _CurrentField = (Enum)field;
+                    _Type = field.GetType().DeclaringType;
+                    if (field.ToString() == "ALL")
+                    {
+                        _QueryFields += " , * ";
+                    }
+                    else
+                    {
+                        _QueryFields += " , " + field.ToString() + " ";
+                    }
+
+                    if (_Type.Name != _FirstTable)
+                        _QueryTables += " , " + _Type.Name;
+                }
+                else
+                {
+                    _QueryValues += " and " + _CurrentField + " = " + " @Where" + _CurrentField;
+                    AddSqlParameter("@Where" + _CurrentField, field);
+                }
+                _IndexOfValues++;
+            }
+
+            _QueryTables = _QueryTables.Remove(1, 1);
+            _QueryFields = _QueryFields.Remove(1, 1);
+            _QueryValues = _QueryValues.Remove(1, 3);
+
+            if (_QueryValues == "")
+                return ExecuteSqlStatmentQuery(@"select " + _QueryFields + " from " + _QueryTables, ResultReturnedDataType.Table);
+            else
+                return ExecuteSqlStatmentQuery(@"select " + _QueryFields + " from " + _QueryTables + " Where " + _QueryValues, ResultReturnedDataType.Table);
+        }
+
+        public virtual object SelectScalar(params object[] Fields)
+        {
+            _FirstTable = Fields[0].GetType().DeclaringType.Name;
+            foreach (var field in Fields)
+            {
+                if (field.GetType().BaseType == typeof(Enum))
+                {
+                    _CurrentField = (Enum)field;
+                    _Type = field.GetType().DeclaringType;
+                    if (field.ToString() == "ALL")
+                    {
+                        _QueryFields += " , * ";
+                    }
+                    else
+                    {
+                        _QueryFields += " , " + field.ToString() + " ";
+                    }
+
+                    if (_Type.Name != _FirstTable)
+                        _QueryTables += " , " + _Type.Name;
+                }
+                else
+                {
+                    _QueryValues += " and " + _CurrentField + " = " + " @Where" + _CurrentField;
+                    AddSqlParameter("@Where" + _CurrentField, field);
+                }
+                _IndexOfValues++;
+            }
+
+            _QueryTables = _QueryTables.Remove(1, 1);
+            _QueryFields = _QueryFields.Remove(1, 1);
+            _QueryValues = _QueryValues.Remove(1, 3);
+
+            if (_QueryValues == "")
+                return ExecuteSqlStatmentQuery(@"select " + _QueryFields + " from " + _QueryTables, ResultReturnedDataType.Scalar);
+            else
+                return ExecuteSqlStatmentQuery(@"select " + _QueryFields + " from " + _QueryTables + " Where " + _QueryValues, ResultReturnedDataType.Scalar);
+        }
+
+        public virtual object Update(TablesNames TableName, object[] UserFieldsAndValues, object[] FieldsToWhere)
+        {
+            #region FieldsAndValues
+            foreach (var field in UserFieldsAndValues)
+            {
+                if (field.GetType().BaseType == typeof(Enum))
+                {
+                    _CurrentField = (Enum)field;
+                }
+                else
+                {
+                    _QueryFieldsAndValues += ", " + _CurrentField + " = @" + _CurrentField;
+                    AddSqlParameter("@" + _CurrentField, field);
+                }
+                _IndexOfValues++;
+            }
+            #endregion
+
+            #region FieldsToWhere
+            _IndexOfValues = 0;
+            foreach (var field in FieldsToWhere)
+            {
+                if (field.GetType().BaseType == typeof(Enum))
+                {
+                    _CurrentField = (Enum)field;
+                }
+                else
+                {
+                    _QueryFieldsToWhere += " and " + _CurrentField + " = " + " @Where" + _CurrentField;
+                    AddSqlParameter("@Where" + _CurrentField, field);
+                }
+                _IndexOfValues++;
+            }
+            #endregion
+
+            _QueryFieldsAndValues = _QueryFieldsAndValues.Remove(1, 1);
+            _QueryFieldsToWhere = _QueryFieldsToWhere.Remove(1, 3);
+
+            return ExecuteSqlStatmentQuery(@"UPDATE " + TableName.ToString() + " SET " + _QueryFieldsAndValues + " WHERE " + _QueryFieldsToWhere, ResultReturnedDataType.NumberOfRowsAffected);
+        }
+
+        public void AddSqlParameter(string Name, object value)
+        {
+            _SqlParameters.Add(new SqlParameter(Name, value));
+        }
+
+        public virtual object Insert(TablesNames TableName, params object[] FieldsAndValues)
+        {
+            foreach (var field in FieldsAndValues)
+            {
+                if (field.GetType().BaseType == typeof(Enum))
+                {
+                    _CurrentField = (Enum)field;
+                    _QueryFields += " , " + field.ToString() + " ";
+                }
+                else
+                {
+                    _QueryValues += " , @" + _CurrentField;
+                    AddSqlParameter("@" + _CurrentField, field);
+                }
+                _IndexOfValues++;
+            }
+            _QueryFields = _QueryFields.Remove(1, 1);
+            _QueryValues = _QueryValues.Remove(1, 1);
+            return ExecuteSqlStatmentQuery(@"INSERT INTO " + TableName.ToString() + " ( " + _QueryFields + " )VALUES ( " + _QueryValues + " )", ResultReturnedDataType.NumberOfRowsAffected); ;
+        }
+    }
+}
