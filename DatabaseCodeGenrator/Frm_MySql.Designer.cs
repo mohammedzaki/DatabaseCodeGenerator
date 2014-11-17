@@ -108,6 +108,7 @@
             this.cbo_DatabaseName.RightToLeft = System.Windows.Forms.RightToLeft.No;
             this.cbo_DatabaseName.Size = new System.Drawing.Size(224, 21);
             this.cbo_DatabaseName.TabIndex = 26;
+            this.cbo_DatabaseName.SelectedIndexChanged += new System.EventHandler(this.cbo_DatabaseName_SelectedIndexChanged);
             // 
             // btn_DatabaseSearch
             // 
@@ -118,6 +119,7 @@
             this.btn_DatabaseSearch.TabIndex = 24;
             this.btn_DatabaseSearch.Text = "Search For Databases";
             this.btn_DatabaseSearch.UseVisualStyleBackColor = true;
+            this.btn_DatabaseSearch.Click += new System.EventHandler(this.btn_DatabaseSearch_Click);
             // 
             // btn_TestConnection
             // 
@@ -128,6 +130,7 @@
             this.btn_TestConnection.TabIndex = 25;
             this.btn_TestConnection.Text = "Test Connection";
             this.btn_TestConnection.UseVisualStyleBackColor = true;
+            this.btn_TestConnection.Click += new System.EventHandler(this.btn_TestConnection_Click);
             // 
             // label3
             // 

@@ -218,6 +218,8 @@ namespace DatabaseCodeGenrator
                 return "char";
             else if (dataTypename == "binary")
                 return "byte";
+            else if (dataTypename == "table type")
+                return "DataTable";
             else
                 return "string";
         }
@@ -352,7 +354,36 @@ namespace DatabaseCodeGenrator
             {
                 this.stream3_5ClassStordedProcedures.WriteLine("                DB.AddSqlParameter(\"@" + pram.Key.Remove(0, 1) + "\", " + pram.Key.Remove(0, 1) + ");");
             }
-            this.stream3_5ClassStordedProcedures.WriteLine("                return (DataSet)DB.ExecuteSqlStatmentQuery(@\"EXECUTE " + StordedProcedureName + " " + StordedSqlParameter + " \", N_Tier_Classes.DataAccessLayer.DB_OperationProcess.ResultReturnedDataType.DataSet);");
+            this.stream3_5ClassStordedProcedures.WriteLine("                return (DataSet)DB.ExecuteSqlStored(\"" + StordedProcedureName + "\", N_Tier_Classes.DataAccessLayer.DB_OperationProcess.ResultReturnedDataType.DataSet);");
+
+            /*
+             AddSqlParameter("@pram1", pram1);
+             return (DataSet)ExecuteSqlStatmentQuery(@"EXECUTE spTest @pram1", ResultReturnedDataType.DataSet);
+             * */
+
+            this.stream3_5ClassStordedProcedures.WriteLine("            }");
+
+        }
+
+        public void AddClassMySQLStordedProcedure(string StordedProcedureName, string dataType, Dictionary<string, string> prams)
+        {
+            string StordedPrams = "";
+            string StordedSqlParameter = "";
+            foreach (KeyValuePair<string, string> pram in prams)
+            {
+                StordedPrams += pram.Value + " " + pram.Key.Remove(0, 1) + ", ";
+                StordedSqlParameter += "@" + pram.Key.Remove(0, 1) + ", ";
+            }
+            StordedPrams = StordedPrams.Remove(StordedPrams.LastIndexOf(','));
+            StordedSqlParameter = StordedSqlParameter.Remove(StordedSqlParameter.LastIndexOf(','));
+
+            this.stream3_5ClassStordedProcedures.WriteLine("            public " + dataType + " " + StordedProcedureName + " (" + StordedPrams + ")");
+            this.stream3_5ClassStordedProcedures.WriteLine("            {");
+            foreach (KeyValuePair<string, string> pram in prams)
+            {
+                this.stream3_5ClassStordedProcedures.WriteLine("                DB.AddSqlParameter(\"@" + pram.Key.Remove(0, 1) + "\", " + pram.Key.Remove(0, 1) + ");");
+            }
+            this.stream3_5ClassStordedProcedures.WriteLine("                return (DataSet)DB.ExecuteSqlStatmentQuery(@\"CALL " + StordedProcedureName + " (" + StordedSqlParameter + " )\", N_Tier_Classes.DataAccessLayer.DB_OperationProcess.ResultReturnedDataType.DataSet);");
 
             /*
              AddSqlParameter("@pram1", pram1);
@@ -561,10 +592,103 @@ namespace DatabaseCodeGenrator
                 _TransactionsCommands.Add(new SqlCommand(SqlQureyStatment, _Connection));
                 if (_SqlParameters.Count > 0)
                 {
-                    foreach (SqlParameter CurrentPar in _SqlParameters)
+                    /*foreach (SqlParameter CurrentPar in _SqlParameters)
                     {
                         _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.Add(CurrentPar);
-                    }
+                    }*/
+                    _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.AddRange(_SqlParameters.ToArray());
+                }
+                DataSet Dataset = new DataSet();
+                SqlDataAdapter DataReader = new SqlDataAdapter();
+                SqlCommandBuilder sqlbuilder = new SqlCommandBuilder();
+                if (_TransPeriod)
+                {
+                    _TransactionsCommands[_TransactionsCommands.Count - 1].Transaction = _Transaction;
+                    //command.Transaction = transaction;
+                }
+                switch (ReturnType)
+                {
+                    case ResultReturnedDataType.Table:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset.Tables[0];
+                        break;
+                    case ResultReturnedDataType.Column:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset.Tables[0].Columns[0];
+                        break;
+                    case ResultReturnedDataType.Row:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        if (Dataset.Tables[0].Rows.Count > 0)
+                            Result = Dataset.Tables[0].Rows[0];
+                        else
+                            Result = null;
+                        break;
+                    case ResultReturnedDataType.Scalar:
+                        Result = _TransactionsCommands[_TransactionsCommands.Count - 1].ExecuteScalar();
+                        break;
+                    case ResultReturnedDataType.NumberOfRowsAffected:
+                        Result = _TransactionsCommands[_TransactionsCommands.Count - 1].ExecuteNonQuery();
+                        break;
+                    case ResultReturnedDataType.DataSet:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset;
+                        break;
+                }
+                if (_TransPeriod == false)
+                {
+                    _Connection.Close();
+                    _Connection.ConnectionString = "";
+                    _TransactionsCommands.Clear();
+                }
+
+            }
+            catch (Exception Exp)
+            {
+                //_Connection.Close();
+                //_Connection.ConnectionString = "";
+                //RollBackTransaction();
+                //Result = null;
+                throw Exp;
+            }
+            _QueryValues = "";
+            if (_SqlParameters.Count > 0)
+                _SqlParameters.Clear();
+            _QueryFieldsAndValues = "";
+            _QueryFieldsToWhere = "";
+            _QueryFields = "";
+            _QueryTables = "";
+            _FirstTable = "";
+            _IndexOfValues = 0;
+            return Result;
+        }
+
+        public virtual object ExecuteSqlStored(string SqlQureyStatment, ResultReturnedDataType ReturnType)
+        {
+            object Result = null;
+            try
+            {
+                if (_TransPeriod == false)
+                {
+                    _Connection.ConnectionString = _ConnectionString;
+                    _Connection.Open();
+                }
+                _TransactionsCommands.Add(new SqlCommand(SqlQureyStatment, _Connection));
+                _TransactionsCommands[_TransactionsCommands.Count - 1].CommandType = CommandType.StoredProcedure;
+                if (_SqlParameters.Count > 0)
+                {
+                    /*foreach (SqlParameter CurrentPar in _SqlParameters)
+                    {
+                        _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.Add(CurrentPar);
+                    }*/
+                    _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.AddRange(_SqlParameters.ToArray());
                 }
                 DataSet Dataset = new DataSet();
                 SqlDataAdapter DataReader = new SqlDataAdapter();

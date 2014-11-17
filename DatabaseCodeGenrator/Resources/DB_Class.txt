@@ -167,10 +167,103 @@ namespace N_Tier_Classes.DataAccessLayer
                 _TransactionsCommands.Add(new SqlCommand(SqlQureyStatment, _Connection));
                 if (_SqlParameters.Count > 0)
                 {
-                    foreach (SqlParameter CurrentPar in _SqlParameters)
+                    /*foreach (SqlParameter CurrentPar in _SqlParameters)
                     {
                         _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.Add(CurrentPar);
-                    }
+                    }*/
+                    _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.AddRange(_SqlParameters.ToArray());
+                }
+                DataSet Dataset = new DataSet();
+                SqlDataAdapter DataReader = new SqlDataAdapter();
+                SqlCommandBuilder sqlbuilder = new SqlCommandBuilder();
+                if (_TransPeriod)
+                {
+                    _TransactionsCommands[_TransactionsCommands.Count - 1].Transaction = _Transaction;
+                    //command.Transaction = transaction;
+                }
+                switch (ReturnType)
+                {
+                    case ResultReturnedDataType.Table:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset.Tables[0];
+                        break;
+                    case ResultReturnedDataType.Column:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset.Tables[0].Columns[0];
+                        break;
+                    case ResultReturnedDataType.Row:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        if (Dataset.Tables[0].Rows.Count > 0)
+                            Result = Dataset.Tables[0].Rows[0];
+                        else
+                            Result = null;
+                        break;
+                    case ResultReturnedDataType.Scalar:
+                        Result = _TransactionsCommands[_TransactionsCommands.Count - 1].ExecuteScalar();
+                        break;
+                    case ResultReturnedDataType.NumberOfRowsAffected:
+                        Result = _TransactionsCommands[_TransactionsCommands.Count - 1].ExecuteNonQuery();
+                        break;
+                    case ResultReturnedDataType.DataSet:
+                        DataReader = new SqlDataAdapter(_TransactionsCommands[_TransactionsCommands.Count - 1]);
+                        sqlbuilder = new SqlCommandBuilder(DataReader);
+                        DataReader.Fill(Dataset);
+                        Result = Dataset;
+                        break;
+                }
+                if (_TransPeriod == false)
+                {
+                    _Connection.Close();
+                    _Connection.ConnectionString = "";
+                    _TransactionsCommands.Clear();
+                }
+
+            }
+            catch (Exception Exp)
+            {
+                //_Connection.Close();
+                //_Connection.ConnectionString = "";
+                //RollBackTransaction();
+                //Result = null;
+                throw Exp;
+            }
+            _QueryValues = "";
+            if (_SqlParameters.Count > 0)
+                _SqlParameters.Clear();
+            _QueryFieldsAndValues = "";
+            _QueryFieldsToWhere = "";
+            _QueryFields = "";
+            _QueryTables = "";
+            _FirstTable = "";
+            _IndexOfValues = 0;
+            return Result;
+        }
+
+        public virtual object ExecuteSqlStored(string SqlQureyStatment, ResultReturnedDataType ReturnType)
+        {
+            object Result = null;
+            try
+            {
+                if (_TransPeriod == false)
+                {
+                    _Connection.ConnectionString = _ConnectionString;
+                    _Connection.Open();
+                }
+                _TransactionsCommands.Add(new SqlCommand(SqlQureyStatment, _Connection));
+                _TransactionsCommands[_TransactionsCommands.Count - 1].CommandType = CommandType.StoredProcedure;
+                if (_SqlParameters.Count > 0)
+                {
+                    /*foreach (SqlParameter CurrentPar in _SqlParameters)
+                    {
+                        _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.Add(CurrentPar);
+                    }*/
+                    _TransactionsCommands[_TransactionsCommands.Count - 1].Parameters.AddRange(_SqlParameters.ToArray());
                 }
                 DataSet Dataset = new DataSet();
                 SqlDataAdapter DataReader = new SqlDataAdapter();

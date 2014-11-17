@@ -441,11 +441,11 @@ namespace N_Tier_Classes.DataAccessLayer
                 if (field.GetType().BaseType == typeof(Enum))
                 {
                     _CurrentField = (Enum)field;
-                        _QueryFields += " , " + field.ToString() + " ";
-                            }
-                            else
-                            {
-                                _QueryValues += ", @" + _CurrentField;
+                    _QueryFields += " , " + field.ToString() + " ";
+                }
+                else
+                {
+                    _QueryValues += " , @" + _CurrentField;
                     AddSqlParameter("@" + _CurrentField, field);
                 }
                 _IndexOfValues++;

@@ -84,5 +84,30 @@ namespace DatabaseCodeGenrator.Properties {
                 return ResourceManager.GetString("DB_Class", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to using System;
+        ///using System.Collections.Generic; 
+        ///using System.Data;
+        ///using System.Text;
+        ///using MySql.Data.MySqlClient;
+        ///
+        ///namespace N_Tier_Classes.DataAccessLayer
+        ///{
+        ///	public class DB_OperationProcess
+        ///    {
+        ///        #region Fields
+        ///        private string _QueryFields = &quot;&quot;;
+        ///        private string _QueryFieldsAndValues = &quot;&quot;;
+        ///        private string _QueryFieldsToWhere = &quot;&quot;;
+        ///        private string _QueryValues = &quot;&quot;;
+        ///        private List&lt;MySqlParameter&gt; _SqlParameters = new List&lt;MySqlParameter&gt;();
+        ///       [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string DB_MySqlClass {
+            get {
+                return ResourceManager.GetString("DB_MySqlClass", resourceCulture);
+            }
+        }
     }
 }
